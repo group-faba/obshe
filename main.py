@@ -1,11 +1,11 @@
 import os
 
-# Отключаем FlexAttention через переменную окружения
+# Отключаем интеграцию FlexAttention
 os.environ["TRANSFORMERS_NO_FLEX_ATTENTION"] = "1"
 
 import torch
 
-# Если у torch отсутствует атрибут compiler, задаём заглушку
+# Если у torch отсутствует атрибут compiler, добавляем заглушку
 if not hasattr(torch, "compiler"):
     class DummyCompiler:
         @staticmethod
@@ -15,7 +15,7 @@ if not hasattr(torch, "compiler"):
             return decorator
     torch.compiler = DummyCompiler()
 
-# Если отсутствует float8_e4m3fn, задаём его как dummy, например, используем torch.float32
+# Если отсутствует float8_e4m3fn – задаем dummy (используем torch.float32)
 if not hasattr(torch, "float8_e4m3fn"):
     torch.float8_e4m3fn = torch.float32
 
@@ -25,7 +25,23 @@ import transformers
 print("Transformers version:", transformers.__version__)
 
 from flask import Flask, request, jsonify
-from transformers import pipeline, Conversation
+from transformers import pipeline
+
+# Пытаемся импортировать Conversation из transformers,
+# если не удалось – определяем минимальную реализацию
+try:
+    from transformers import Conversation
+except ImportError:
+    class Conversation:
+        def __init__(self, text, conversation_id=None):
+            # Список предыдущих пользовательских сообщений
+            self.past_user_inputs = [text]
+            # Список сгенерированных ответов модели (будет обновляться пайплайном)
+            self.generated_responses = []
+            self.conversation_id = conversation_id
+
+        def add_user_input(self, text):
+            self.past_user_inputs.append(text)
 
 app = Flask(__name__)
 
@@ -46,7 +62,7 @@ def chat():
 
     user_message = data["message"]
 
-    # Создаем или обновляем диалог
+    # Создаем новый диалог или обновляем существующий
     if conversation is None:
         conversation = Conversation(user_message)
     else:
