@@ -39,3 +39,5 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 MODEL_NAME = "microsoft/DialoGPT-small"
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 model = AutoModelForCausalLM.from_pretrained(MODEL_NAME)
+port = int(os.environ.get("PORT", 5000))
+app.run(host="0.0.0.0", port=port)
