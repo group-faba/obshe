@@ -5,7 +5,7 @@ os.environ["TRANSFORMERS_NO_FLEX_ATTENTION"] = "1"
 
 import torch
 
-# Если у torch отсутствует атрибут compiler, добавляем его как заглушку
+# Если у torch отсутствует атрибут compiler, задаём заглушку
 if not hasattr(torch, "compiler"):
     class DummyCompiler:
         @staticmethod
@@ -15,10 +15,15 @@ if not hasattr(torch, "compiler"):
             return decorator
     torch.compiler = DummyCompiler()
 
+# Если отсутствует float8_e4m3fn, задаём его как dummy, например, используем torch.float32
+if not hasattr(torch, "float8_e4m3fn"):
+    torch.float8_e4m3fn = torch.float32
+
 print("Torch version:", torch.__version__)
 
 import transformers
 print("Transformers version:", transformers.__version__)
+
 from flask import Flask, request, jsonify
 from transformers import pipeline, Conversation
 
