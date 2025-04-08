@@ -1,4 +1,5 @@
-from transformers import pipeline, Conversation
+from transformers import pipeline
+from transformers.pipelines.conversational import Conversation
 
 # Инициализируем пайплайн для диалогов с моделью DialoGPT-medium.
 chatbot = pipeline("conversational", model="microsoft/DialoGPT-medium")
