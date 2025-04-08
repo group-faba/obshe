@@ -3,7 +3,7 @@ import os
 os.environ["TRANSFORMERS_NO_FLEX_ATTENTION"] = "1"
 
 import torch
-# Если у torch отсутствует атрибут compiler, создаём dummy‑заглушку
+# Если отсутствует атрибут compiler, создаём dummy-заглушку
 if not hasattr(torch, "compiler"):
     class DummyCompiler:
         @staticmethod
@@ -12,8 +12,7 @@ if not hasattr(torch, "compiler"):
                 return func
             return decorator
     torch.compiler = DummyCompiler()
-
-# Если отсутствует float8_e4m3fn – задаём dummy (используем torch.float32)
+# Если отсутствует float8_e4m3fn – задаём dummy (заменяем на torch.float32)
 if not hasattr(torch, "float8_e4m3fn"):
     torch.float8_e4m3fn = torch.float32
 
@@ -24,12 +23,12 @@ print("Transformers version:", transformers.__version__)
 from flask import Flask, request, jsonify
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# Загружаем модель и токенизатор для DialoGPT-medium
-model_name = "microsoft/DialoGPT-medium"
+# Используем DialoGPT-small для уменьшения расхода памяти
+model_name = "microsoft/DialoGPT-small"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForCausalLM.from_pretrained(model_name)
 
-# Глобальное состояние для хранения истории диалога (chat_history_ids)
+# Глобальное состояние для хранения истории диалога
 chat_history_ids = None
 
 app = Flask(__name__)
@@ -46,24 +45,24 @@ def chat():
         return jsonify({"error": "No message provided"}), 400
 
     user_message = data["message"]
-    # Кодируем новое сообщение, добавляя токен конца последовательности
+    # Кодируем новое сообщение и добавляем токен конца последовательности
     new_input_ids = tokenizer.encode(user_message + tokenizer.eos_token, return_tensors="pt")
 
-    # Если это первое сообщение, используем его, иначе объединяем с историей диалога
-    if chat_history_ids is None:
-         bot_input_ids = new_input_ids
+    # Если это первое сообщение или история слишком длинная, сбрасываем историю
+    if chat_history_ids is None or chat_history_ids.shape[-1] > 256:
+        bot_input_ids = new_input_ids
     else:
-         bot_input_ids = torch.cat([chat_history_ids, new_input_ids], dim=-1)
+        bot_input_ids = torch.cat([chat_history_ids, new_input_ids], dim=-1)
 
-    # Генерируем ответ модели с учётом всей истории
+    # Ограничиваем max_length для уменьшения расхода памяти
     chat_history_ids = model.generate(
         bot_input_ids,
-        max_length=1000,
+        max_length=200,
         pad_token_id=tokenizer.eos_token_id
     )
-
-    # Извлекаем сгенерированный ответ (новые токены после пользовательского ввода)
-    bot_response = tokenizer.decode(chat_history_ids[:, bot_input_ids.shape[-1]:][0], skip_special_tokens=True)
+    # Извлекаем ответ (токены после пользовательского ввода)
+    response_ids = chat_history_ids[:, bot_input_ids.shape[-1]:]
+    bot_response = tokenizer.decode(response_ids[0], skip_special_tokens=True)
     return jsonify({"response": bot_response})
 
 if __name__ == "__main__":
