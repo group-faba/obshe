@@ -25,7 +25,11 @@ import transformers
 print("Transformers version:", transformers.__version__)
 
 from flask import Flask, request, jsonify
-from transformers import pipeline, Conversation
+from transformers import pipeline
+try:
+    from transformers import Conversation
+except ImportError:
+    from transformers.conversational import Conversation
 
 app = Flask(__name__)
 
