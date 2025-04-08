@@ -33,11 +33,17 @@ print("Torch version:", torch.__version__)
 import transformers
 print("Transformers version:", transformers.__version__)
 
+# Импортируем Flask и создаём экземпляр приложения
+from flask import Flask
+app = Flask(__name__)
+
 # Дальше можно загружать модель, например:
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 MODEL_NAME = "microsoft/DialoGPT-small"
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 model = AutoModelForCausalLM.from_pretrained(MODEL_NAME)
+
+# Запуск веб-сервиса
 port = int(os.environ.get("PORT", 5000))
 app.run(host="0.0.0.0", port=port)
