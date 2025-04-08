@@ -3,8 +3,7 @@ import os
 os.environ["TRANSFORMERS_NO_FLEX_ATTENTION"] = "1"
 
 import torch
-
-# Если у torch отсутствует атрибут compiler, создаём dummy-заглушку
+# Если у torch отсутствует атрибут compiler, создаём dummy‑заглушку
 if not hasattr(torch, "compiler"):
     class DummyCompiler:
         @staticmethod
@@ -14,7 +13,7 @@ if not hasattr(torch, "compiler"):
             return decorator
     torch.compiler = DummyCompiler()
 
-# Если отсутствует float8_e4m3fn – задаём его как dummy (заменяем на torch.float32)
+# Если отсутствует float8_e4m3fn – задаём dummy (используем torch.float32)
 if not hasattr(torch, "float8_e4m3fn"):
     torch.float8_e4m3fn = torch.float32
 
@@ -23,24 +22,17 @@ import transformers
 print("Transformers version:", transformers.__version__)
 
 from flask import Flask, request, jsonify
-from transformers import pipeline
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# Минимальная реализация Conversation для версии transformers 4.51.1
-class Conversation:
-    def __init__(self, text, conversation_id=None):
-        # Сохраняем историю пользовательских сообщений и ответов модели
-        self.past_user_inputs = [text]
-        self.generated_responses = []
-        self.conversation_id = conversation_id
+# Загружаем модель и токенизатор для DialoGPT-medium
+model_name = "microsoft/DialoGPT-medium"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModelForCausalLM.from_pretrained(model_name)
 
-    def add_user_input(self, text):
-        self.past_user_inputs.append(text)
+# Глобальное состояние для хранения истории диалога (chat_history_ids)
+chat_history_ids = None
 
 app = Flask(__name__)
-
-# Инициализируем pipeline для диалогов с DialoGPT-medium
-chatbot = pipeline("conversational", model="microsoft/DialoGPT-medium")
-conversation = None  # Объект для хранения истории диалога
 
 @app.route("/")
 def index():
@@ -48,23 +40,31 @@ def index():
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    global conversation
+    global chat_history_ids
     data = request.get_json()
     if not data or "message" not in data:
         return jsonify({"error": "No message provided"}), 400
 
     user_message = data["message"]
+    # Кодируем новое сообщение, добавляя токен конца последовательности
+    new_input_ids = tokenizer.encode(user_message + tokenizer.eos_token, return_tensors="pt")
 
-    # Если диалог еще не начат — создаём новый, иначе добавляем новый ввод
-    if conversation is None:
-        conversation = Conversation(user_message)
+    # Если это первое сообщение, используем его, иначе объединяем с историей диалога
+    if chat_history_ids is None:
+         bot_input_ids = new_input_ids
     else:
-        conversation.add_user_input(user_message)
-    
-    result = chatbot(conversation)
-    # Если сгенерированные ответы отсутствуют, возвращаем пустую строку
-    answer = result.generated_responses[-1] if result.generated_responses else ""
-    return jsonify({"response": answer})
+         bot_input_ids = torch.cat([chat_history_ids, new_input_ids], dim=-1)
+
+    # Генерируем ответ модели с учётом всей истории
+    chat_history_ids = model.generate(
+        bot_input_ids,
+        max_length=1000,
+        pad_token_id=tokenizer.eos_token_id
+    )
+
+    # Извлекаем сгенерированный ответ (новые токены после пользовательского ввода)
+    bot_response = tokenizer.decode(chat_history_ids[:, bot_input_ids.shape[-1]:][0], skip_special_tokens=True)
+    return jsonify({"response": bot_response})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
