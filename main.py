@@ -1,8 +1,22 @@
 import os
+
+# Отключаем FlexAttention через переменную окружения
 os.environ["TRANSFORMERS_NO_FLEX_ATTENTION"] = "1"
 
 import torch
+
+# Если у torch отсутствует атрибут compiler, добавляем его как заглушку
+if not hasattr(torch, "compiler"):
+    class DummyCompiler:
+        @staticmethod
+        def disable(recursive=False):
+            def decorator(func):
+                return func
+            return decorator
+    torch.compiler = DummyCompiler()
+
 print("Torch version:", torch.__version__)
+
 import transformers
 print("Transformers version:", transformers.__version__)
 from flask import Flask, request, jsonify
