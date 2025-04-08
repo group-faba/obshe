@@ -1,3 +1,5 @@
+import torch
+print("Torch version:", torch.__version__)
 import os
 import transformers
 from flask import Flask, request, jsonify
