@@ -1,18 +1,17 @@
+import os
+os.environ["TRANSFORMERS_NO_FLEX_ATTENTION"] = "1"
+
 import torch
 print("Torch version:", torch.__version__)
-import os
 import transformers
+print("Transformers version:", transformers.__version__)
 from flask import Flask, request, jsonify
 from transformers import pipeline, Conversation
-
-# Вывод версии transformers (для отладки)
-print("Transformers version:", transformers.__version__)
 
 app = Flask(__name__)
 
 # Инициализируем чат-бота с моделью DialoGPT-medium
 chatbot = pipeline("conversational", model="microsoft/DialoGPT-medium")
-
 conversation = None  # Объект для хранения истории диалога
 
 @app.route("/")
