@@ -105,11 +105,8 @@ async def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Запуск бота (polling)
-    await application.initialize()
-    await application.start()
-    await application.updater.start_polling()
-    await application.idle()
+    # Запускаем бота (polling). run_polling() блокирует выполнение до завершения работы бота.
+    await application.run_polling()
 
 if __name__ == "__main__":
     import asyncio
