@@ -51,13 +51,11 @@ from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler,
     ContextTypes, filters
 )
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# ─── Модель ─────────────────────────────────────────────────────────────────────
 MODEL_NAME = "microsoft/DialoGPT-small"
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-model = AutoModelForCausalLM.from_pretrained(MODEL_NAME)
-model = model.to("cpu")
+model = AutoModelForCausalLM.from_pretrained(MODEL_NAME)  # не трогай .to()
 
 chat_histories = {}
 
