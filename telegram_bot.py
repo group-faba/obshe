@@ -5,7 +5,7 @@ import torch
 # Отключаем интеграцию FlexAttention
 os.environ["TRANSFORMERS_NO_FLEX_ATTENTION"] = "1"
 
-# Заглушка для torch.compiler, если он не определён
+# Если у torch отсутствует атрибут compiler, создаём dummy-заглушку
 if not hasattr(torch, "compiler"):
     class DummyCompiler:
         @staticmethod
@@ -110,4 +110,6 @@ async def main():
 
 if __name__ == "__main__":
     import asyncio
+    import nest_asyncio
+    nest_asyncio.apply()  # Позволяет повторно использовать уже запущенный event loop
     asyncio.run(main())
