@@ -5,7 +5,7 @@ import torch
 # Отключаем интеграцию FlexAttention
 os.environ["TRANSFORMERS_NO_FLEX_ATTENTION"] = "1"
 
-# Если у torch отсутствует атрибут compiler, создаём dummy-заглушку
+# Заглушка для torch.compiler, если он не определён
 if not hasattr(torch, "compiler"):
     class DummyCompiler:
         @staticmethod
@@ -73,7 +73,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     # Кодируем новое сообщение с добавлением токена конца последовательности
     new_input_ids = tokenizer.encode(user_message + tokenizer.eos_token, return_tensors="pt")
 
-    # Если истории для чата ещё нет или она слишком длинная, начинаем новую
+    # Если истории для чата ещё нет или она слишком длинная, начинаем новую историю
     if chat_id not in chat_histories or chat_histories[chat_id] is None or chat_histories[chat_id].shape[-1] > 256:
         bot_input_ids = new_input_ids
     else:
@@ -89,7 +89,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     # Сохраняем обновленную историю для данного чата
     chat_histories[chat_id] = chat_history_ids
 
-    # Извлекаем ответ — токены, сгенерированные после пользовательского ввода
+    # Извлекаем сгенерированный ответ (токены после пользовательского ввода)
     response_ids = chat_history_ids[:, bot_input_ids.shape[-1]:]
     bot_response = tokenizer.decode(response_ids[0], skip_special_tokens=True)
     await update.message.reply_text(bot_response)
@@ -105,8 +105,8 @@ async def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Запускаем бота (polling). run_polling() блокирует выполнение до завершения работы бота.
-    await application.run_polling()
+    # Запускаем бота (polling) без закрытия цикла событий
+    await application.run_polling(close_loop=False)
 
 if __name__ == "__main__":
     import asyncio
