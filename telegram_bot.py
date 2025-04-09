@@ -54,8 +54,9 @@ from telegram.ext import (
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 MODEL_NAME = "microsoft/DialoGPT-small"
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-model = AutoModelForCausalLM.from_pretrained(MODEL_NAME)  # не трогай .to()
+
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, cache_dir="./model", force_download=True)
+model = AutoModelForCausalLM.from_pretrained(MODEL_NAME, cache_dir="./model", force_download=True)
 
 chat_histories = {}
 
