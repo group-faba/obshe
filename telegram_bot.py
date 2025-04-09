@@ -1,3 +1,10 @@
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    user_message = update.message.text
+    logging.info(f"Получено сообщение от {chat_id}: {user_message}")
+
+    # Далее код обработки, как указан выше...
+
 import numpy as np
 print("NumPy version:", np.__version__)
 import os
