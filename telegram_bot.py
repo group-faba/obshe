@@ -1,22 +1,13 @@
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    chat_id = update.effective_chat.id
-    user_message = update.message.text
-    logging.info(f"Получено сообщение от {chat_id}: {user_message}")
-
-    # Далее код обработки, как указан выше...
-
-import numpy as np
-print("NumPy version:", np.__version__)
 import os
 import logging
 import torch
 import threading
 import nest_asyncio
 
-# Применяем nest_asyncio для предотвращения ошибок с уже запущенным циклом событий
+# Применяем nest_asyncio для предотвращения ошибок с уже запущенным event loop
 nest_asyncio.apply()
 
-# Запускаем dummy HTTP-сервер (Flask), чтобы Render видел открытый порт
+# Запускаем dummy HTTP-сервер (Flask) для удовлетворения требования Render об открытом порту
 from flask import Flask
 dummy_app = Flask(__name__)
 @dummy_app.route("/")
@@ -57,8 +48,7 @@ print("Torch version:", torch.__version__)
 import transformers
 print("Transformers version:", transformers.__version__)
 
-# Импорт необходимых модулей из transformers и telegram
-from transformers import AutoModelForCausalLM, AutoTokenizer
+# Импорт необходимых модулей из telegram и transformers
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
@@ -67,57 +57,57 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # Используем DialoGPT-small для экономии памяти.
-# Загрузка модели с явным перемещением на CPU и параметром low_cpu_mem_usage=True,
-# чтобы избежать состояния meta.
+# Загружаем модель на CPU с помощью accelerate
 MODEL_NAME = "microsoft/DialoGPT-small"
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 model = AutoModelForCausalLM.from_pretrained(MODEL_NAME, device_map="cpu", low_cpu_mem_usage=True)
 
-# Словарь для хранения истории диалога для каждого чата.
+# Словарь для хранения истории диалога для каждого чата
 chat_histories = {}
 
-# Настройка логгирования.
+# Настройка логгирования
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
 
-# Команда /start.
+# Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("Привет! Я Telegram-бот на основе DialoGPT. Напиши сообщение для начала диалога.")
 
-# Обработка входящих сообщений.
+# Обработка входящих сообщений
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
     user_message = update.message.text
 
-    # Кодируем новое сообщение (добавляем токен конца последовательности).
+    # Кодируем новое сообщение (добавляем токен конца последовательности)
     new_input_ids = tokenizer.encode(user_message + tokenizer.eos_token, return_tensors="pt")
 
-    # Если для данного чата истории ещё нет или она слишком длинная, начинаем новую.
+    # Если для данного чата истории ещё нет или она слишком длинная, начинаем новую историю
     if chat_id not in chat_histories or chat_histories[chat_id] is None or chat_histories[chat_id].shape[-1] > 256:
         bot_input_ids = new_input_ids
     else:
         bot_input_ids = torch.cat([chat_histories[chat_id], new_input_ids], dim=-1)
 
-    # Генерируем ответ, ограничивая max_length для экономии памяти.
+    # Генерируем ответ, ограничивая max_length для экономии памяти
     chat_history_ids = model.generate(
         bot_input_ids,
         max_length=200,
         pad_token_id=tokenizer.eos_token_id
     )
 
-    # Сохраняем обновлённую историю для данного чата.
+    # Сохраняем обновлённую историю для данного чата
     chat_histories[chat_id] = chat_history_ids
 
-    # Извлекаем сгенерированный ответ (токены после пользовательского ввода).
+    # Извлекаем сгенерированный ответ (токены после пользовательского ввода)
     response_ids = chat_history_ids[:, bot_input_ids.shape[-1]:]
     bot_response = tokenizer.decode(response_ids[0], skip_special_tokens=True)
     await update.message.reply_text(bot_response)
 
-# Главная функция для запуска Telegram-бота.
+# Главная функция для запуска Telegram-бота
 async def main():
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
@@ -128,7 +118,7 @@ async def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Запускаем бота (polling) без закрытия основного цикла.
+    # Запускаем бота (polling) без закрытия основного цикла
     await application.run_polling(close_loop=False)
 
 if __name__ == "__main__":
