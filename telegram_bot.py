@@ -63,7 +63,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 # Загружаем модель на CPU с помощью accelerate
 MODEL_NAME = "microsoft/DialoGPT-small"
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-model = AutoModelForCausalLM.from_pretrained(MODEL_NAME, device_map="cpu", low_cpu_mem_usage=True)
+model = AutoModelForCausalLM.from_pretrained(MODEL_NAME)
+model = model.to("cpu")
 
 # Словарь для хранения истории диалога для каждого чата
 chat_histories = {}
