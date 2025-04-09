@@ -59,10 +59,10 @@ from telegram.ext import (
 )
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# Используем DialoGPT-small для экономии памяти.
-# Загружаем модель на CPU с помощью accelerate
 MODEL_NAME = "microsoft/DialoGPT-small"
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+
+# Надёжный способ загрузки модели без meta-тензоров
 model = AutoModelForCausalLM.from_pretrained(MODEL_NAME)
 model = model.to("cpu")
 
