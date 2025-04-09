@@ -1,11 +1,31 @@
 import os
 import logging
 import torch
+import threading
+import nest_asyncio
+
+# Применяем nest_asyncio, чтобы избежать ошибок с уже запущенным event loop
+nest_asyncio.apply()
+
+# Запускаем dummy HTTP-сервер (Flask) в отдельном потоке,
+# чтобы Render видел открытый порт.
+from flask import Flask
+dummy_app = Flask(__name__)
+
+@dummy_app.route("/")
+def index():
+    return "OK"
+
+def run_dummy_server():
+    port = int(os.environ.get("PORT", 5000))
+    dummy_app.run(host="0.0.0.0", port=port)
+
+threading.Thread(target=run_dummy_server, daemon=True).start()
 
 # Отключаем интеграцию FlexAttention
 os.environ["TRANSFORMERS_NO_FLEX_ATTENTION"] = "1"
 
-# Если у torch отсутствует атрибут compiler, создаём dummy-заглушку
+# Если у torch отсутствует атрибут compiler, создаём dummy‑заглушку
 if not hasattr(torch, "compiler"):
     class DummyCompiler:
         @staticmethod
@@ -21,12 +41,10 @@ if not hasattr(torch, "float8_e4m3fn"):
 
 # Монки-патчим метод load_state_dict, чтобы игнорировать аргумент "assign"
 old_load_state_dict = torch.nn.Module.load_state_dict
-
 def patched_load_state_dict(self, state_dict, strict=True, *args, **kwargs):
     if "assign" in kwargs:
         kwargs.pop("assign")
     return old_load_state_dict(self, state_dict, strict, *args, **kwargs)
-
 torch.nn.Module.load_state_dict = patched_load_state_dict
 
 # Выводим версии для отладки
@@ -46,55 +64,57 @@ from telegram.ext import (
     filters,
 )
 
-# Используем DialoGPT-small для экономии памяти
+# Используем DialoGPT-small для экономии памяти.
+# Загружаем модель явно на CPU через device_map="cpu"
 MODEL_NAME = "microsoft/DialoGPT-small"
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-model = AutoModelForCausalLM.from_pretrained(MODEL_NAME)
+model = AutoModelForCausalLM.from_pretrained(MODEL_NAME, device_map="cpu")
 
-# Словарь для хранения истории диалога для каждого чата
+# Словарь для хранения истории диалога для каждого чата.
 chat_histories = {}
 
-# Настройка логгирования
+# Настройка логгирования.
 logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
 )
 
-# Команда /start
+# Команда /start.
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
-        "Привет! Я Telegram бот на основе DialoGPT. Напиши сообщение, чтобы начать диалог."
+        "Привет! Я Telegram-бот на основе DialoGPT. Напиши сообщение, чтобы начать диалог."
     )
 
-# Обработка входящих сообщений
+# Обработка входящих сообщений.
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
     user_message = update.message.text
 
-    # Кодируем новое сообщение с добавлением токена конца последовательности
+    # Кодируем новое сообщение, добавляя токен конца последовательности.
     new_input_ids = tokenizer.encode(user_message + tokenizer.eos_token, return_tensors="pt")
 
-    # Если истории для чата ещё нет или она слишком длинная, начинаем новую историю
+    # Если для данного чата истории ещё нет или она слишком длинная, начинаем новую.
     if chat_id not in chat_histories or chat_histories[chat_id] is None or chat_histories[chat_id].shape[-1] > 256:
         bot_input_ids = new_input_ids
     else:
         bot_input_ids = torch.cat([chat_histories[chat_id], new_input_ids], dim=-1)
 
-    # Генерируем ответ, ограничивая max_length для экономии памяти
+    # Генерируем ответ, ограничивая max_length для экономии памяти.
     chat_history_ids = model.generate(
         bot_input_ids,
         max_length=200,
         pad_token_id=tokenizer.eos_token_id
     )
 
-    # Сохраняем обновленную историю для данного чата
+    # Сохраняем обновленную историю для данного чата.
     chat_histories[chat_id] = chat_history_ids
 
-    # Извлекаем сгенерированный ответ (токены после пользовательского ввода)
+    # Извлекаем сгенерированный ответ (токены после пользовательского ввода).
     response_ids = chat_history_ids[:, bot_input_ids.shape[-1]:]
     bot_response = tokenizer.decode(response_ids[0], skip_special_tokens=True)
     await update.message.reply_text(bot_response)
 
-# Главная функция для запуска бота
+# Главная функция для запуска Telegram-бота.
 async def main():
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
@@ -105,11 +125,9 @@ async def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Запускаем бота (polling) без закрытия цикла событий
+    # Запускаем бота (polling) без закрытия основного цикла.
     await application.run_polling(close_loop=False)
 
 if __name__ == "__main__":
     import asyncio
-    import nest_asyncio
-    nest_asyncio.apply()  # Позволяет повторно использовать уже запущенный event loop
     asyncio.run(main())
