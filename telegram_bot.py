@@ -1,3 +1,5 @@
+import numpy as np
+print("NumPy version:", np.__version__)
 import os
 import logging
 import torch
